@@ -1,0 +1,24 @@
+{
+  "name": "ff-dns-server",
+  "version": "1.0.0",
+  "description": "FF DNS Server",
+  "main": "index.js",
+  "scripts": {
+		"start": "node index.js",
+		"test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eithan1231/ff-dns-server.git"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/eithan1231/ff-dns-server/issues"
+  },
+  "homepage": "https://github.com/eithan1231/ff-dns-server#readme",
+  "dependencies": {
+    "native-dns-packet": "^0.1.1",
+    "wildcard2": "0.0.2"
+  }
+}
