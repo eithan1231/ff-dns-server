@@ -277,7 +277,7 @@ module.exports = class DNSServer
 			);
 			sock.close();
 
-			console.log(`(FETCHED) Question ${requestInfo.address}:${requestInfo.port} ${this._records[query.question[0].type]} ${query.question[0].name}`);
+			console.log(`(FETCHED) QUERY: ${requestInfo.address}:${requestInfo.port} ${this._records[query.question[0].type]} ${query.question[0].name}`);
 		});
 	}
 
