@@ -16,7 +16,6 @@ fs.watchFile(configFile, () => {
 			throw err;
 		}
 		config = JSON.parse(configContent);
-		console.log(config);
 		server.resetConfig(config);
 		console.log('Updated configuration');
 	});
