@@ -33,27 +33,30 @@ module.exports = class DNSServer
 	{
 		this.config = config;
 
-		if(typeof this.config === 'undefined') {
-			this.config = {};
+		if(typeof config !== 'object') {
+			config = {};
 		}
 
-		if(typeof this.config.nameservers === 'undefined') {
-			this.config.nameservers = [
+		if(typeof config.nameservers === 'undefined') {
+			config.nameservers = [
 				'1.1.1.1',
-				'1.0.0.1',
-				'4.4.4.4',
 				'8.8.8.8'
 			];
 		}
 
-		if(typeof this.config.domainOverwrites === 'undefined') {
-			this.config.domainOverwrites = {
-				'lechr.gateway': {
-					'address': '127.0.0.1',
-					'type': 'A'
-				}
-			};
+		if(typeof config.domainOverwrites === 'undefined') {
+			config.domainOverwrites = { };
 		}
+
+		if(typeof config.domainBlacklists === 'undefined') {
+			config.domainBlacklists = { };
+		}
+
+		if(typeof config.IPBlacklists === 'undefined') {
+			config.IPBlacklists = { };
+		}
+
+		this.config = config;
 
 		console.log('nameservers:');
 		for (const server of this.config.nameservers) {
@@ -92,6 +95,28 @@ module.exports = class DNSServer
 	_error(err)
 	{
 		console.error(err);
+	}
+
+	_cacheStore(key, value)
+	{
+		this._cache[key] = value;
+	}
+
+	_cacheExists(key)
+	{
+		return typeof this._cache[key] !== 'undefined';
+	}
+
+	_cacheGet(key)
+	{
+		return this._cacheExists(key) ? this._cache[key] : null;
+	}
+
+	_cacheDelete(key)
+	{
+		if(this._cacheExists(key)) {
+			delete this._cache[key];
+		}
 	}
 
 	_message(data, requestInfo)
@@ -133,8 +158,6 @@ module.exports = class DNSServer
 					query
 				);
 
-				console.log(responsePacket);
-
 				// Sending response.
 				this._server.send(
 					responsePacket,
@@ -148,13 +171,37 @@ module.exports = class DNSServer
 			}
 		}
 
+		// Domain blacklists
+		if(typeof this.config.domainBlacklists[query.question[0].name] != 'undefined') {
+			console.log(`(BLACKLIST) QUERY: ${requestInfo.address}:${requestInfo.port} ${this._records[query.question[0].type]} ${query.question[0].name} (${cacheKey})`);
+
+			// Recomputing response
+			query.header.qr = 1;
+			query.header.rd = 1;
+			query.header.ra = 1;
+
+			// Creating a response object from cached object
+			const responsePacket = this._createResponse(query);
+
+			// Sending response.
+			this._server.send(
+				responsePacket,
+				0,
+				responsePacket.length,
+				requestInfo.port,
+				requestInfo.address
+			);
+
+			return;
+		}
+
 		// Cached responses.
-		if(typeof this._cache[cacheKey] !== 'undefined') {
+		if(this._cacheExists(cacheKey)) {
 			console.log(`(CACHE) QUERY: ${requestInfo.address}:${requestInfo.port} ${this._records[query.question[0].type]} ${query.question[0].name} (${cacheKey})`);
 
 			// Creating a response object from cached object
 			const response = this._createResponse(
-				this._cache[cacheKey]
+				this._cacheGet(cacheKey)
 			);
 
 			// Sending response.
@@ -183,10 +230,14 @@ module.exports = class DNSServer
 				return;
 			}
 
+			// Timeout is 350 milliseconds, and on each retry attempt, increment
+			// timeout by 100 milliseconds
+			const timeout = 350 + (nsIndex * 100);
+
 			sock.send(data, 0, data.length, DNS_PORT, this.config.nameservers[nsIndex], () => {
 				fallback = setTimeout(() => {
 					sendAttempt(nsIndex + 1);
-				}, 350);
+				}, timeout);
 			})
 		}
 
@@ -206,22 +257,12 @@ module.exports = class DNSServer
 			// Caching response (assuming everything is okay)
 			let responsePacket = nativeDnsPacket.parse(response);
 			if(responsePacket.answer.length > 0) {
-
-				// Initializing cache object. (required)
-				this._cache[cacheKey] = {};
-
-				// Copying response to cache.
-				Object.assign(
-					this._cache[cacheKey],
-					responsePacket
-				);
-
-				// Getting the TTL.
-				const ttl = this._cache[cacheKey].answer[0].ttl;
+				this._cacheStore(cacheKey, responsePacket)
+				const ttl = responsePacket.answer[0].ttl;
 
 				// Setting the auto deleter (TTL is in seconds)
 				setTimeout(() => {
-					delete this._cache[cacheKey];
+					this._cacheDelete(cacheKey);
 				}, ttl * 1000)
 			}
 
